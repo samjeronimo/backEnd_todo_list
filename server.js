@@ -3,6 +3,7 @@ var express = require('express');
 var cors = require('cors');
 //var path = require('path');
 var mysql = require('mysql2'); //<--------- mysql2
+var bcrypt = require('bcryptjs')
 
 // Crear una instancia de la aplicación Express
 var app = express();
@@ -45,12 +46,90 @@ db.connect((err) => {
   console.log('Conexión a la base de datos establecida');
 });
 
+//------------------------------------------------------
+
+// Ruta para verificar si el usuario existe (Login)
+
+// Ruta para hacer login
+app.post('/login', (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Todos los campos son obligatorios' });
+  }
+
+  // Buscar el usuario por email
+  db.query('SELECT * FROM usuario WHERE correo = ?', [email], (err, results) => {
+    if (err) {
+      console.error('Error al ejecutar la consulta: ', err);
+      return res.status(500).json({ error: 'Error en la consulta' });
+    }
+
+    if (results.length === 0) {
+      return res.status(400).json({ error: 'Usuario no encontrado' });
+    }
+
+    const user = results[0];
+
+    // Comparar la contraseña hasheada
+    bcrypt.compare(password, user.contraseña, (err, isMatch) => {
+      if (err) {
+        console.error('Error al comparar contraseñas: ', err);
+        return res.status(500).json({ error: 'Error al verificar la contraseña' });
+      }
+
+      if (!isMatch) {
+        return res.status(400).json({ error: 'Contraseña incorrecta' });
+      }
+
+      res.status(200).json({ message: 'Login exitoso' });
+    });
+  });
+});
+
+// Ruta para registrar un nuevo usuario
+app.post('/registro', (req, res) => {
+  const { nombre, correo, contraseña } = req.body;
+
+  // Verificar si el email ya está registrado
+  db.query('SELECT * FROM usuario WHERE correo = ?', [correo], (err, results) => {
+    if (err) {
+      console.error('Error al ejecutar la consulta: ', err);
+      return res.status(500).json({ error: 'Error en la consulta' });
+    }
+
+    if (results.length > 0) {
+      return res.status(400).json({ error: 'El correo ya está registrado' });
+    }
+
+    // Hashear la contraseña antes de almacenarla
+    bcrypt.hash(contraseña, 10, (err, hashedPassword) => {
+      if (err) {
+        console.error('Error al hashear la contraseña: ', err);
+        return res.status(500).json({ error: 'Error al procesar la contraseña' });
+      }
+
+      // Insertar el nuevo usuario en la base de datos
+      const query = 'INSERT INTO usuario (nombre, correo, contraseña) VALUES (?, ?, ?)';
+      db.query(query, [nombre, correo, hashedPassword], (err, result) => {
+        if (err) {
+          console.error('Error al insertar el usuario: ', err);
+          return res.status(500).json({ error: 'Error al registrar usuario' });
+        }
+
+        res.status(201).json({ message: 'Usuario registrado exitosamente' });
+      });
+    });
+  });
+});
+
+//------------------------------------------------------
 
 // Ruta para consultar los usuarios desde la base de datos
 app.get('/tareas', (req, res) => {
 
   // Realiza una consulta SELECT a la base de datos
-  db.query('SELECT * FROM tareas', (err, results) => {
+  db.query('SELECT * FROM tarea', (err, results) => {
   if (err) {
   console.error('Error al ejecutar la consulta: ', err);
   res.status(500).send('Error en la consulta');
@@ -63,22 +142,22 @@ app.get('/tareas', (req, res) => {
   
   });
 
-  app.post('/agregar', (req, res) => {
-    const { nombre_tarea, estado } = req.body;
+  /*app.post('/agregar', (req, res) => {
+    const { nombre, estado } = req.body;
   
-    if (!nombre_tarea || !estado) {
+    if (!nombre || !estado) {
       return res.status(400).json({ error: 'Todos los campos son obligatorios' });
     }
   
-    const query = 'INSERT INTO tareas (nombre_tarea, estado) VALUES (?, ?)';
-    db.query(query, [nombre_tarea, estado], (err, result) => {
+    const query = 'INSERT INTO tareas (tarea, estado) VALUES (?, ?)';
+    db.query(query, [nombre, estado], (err, result) => {
       if (err) {
         console.error('Error al insertar la tarea: ', err);
         return res.status(500).json({ error: 'Error al guardar la tarea' });
       }
-      res.status(201).json({ id: result.insertId, nombre_tarea, estado });
+      res.status(201).json({ id: result.insertId, nombre, estado });
     });
-  });
+  });*/
 
 //----------------------------------------------------------------------------
 
